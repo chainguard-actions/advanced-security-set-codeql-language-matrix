@@ -1,0 +1,85 @@
+name: Test exclude languages
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Start mock languages API server
+        run: |
+          cat > /tmp/mock_server.py << 'EOF'
+          import http.server
+          import json
+
+          class Handler(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  body = json.dumps({"Python": 12345, "JavaScript": 6789, "Go": 4321}).encode()
+                  self.send_response(200)
+                  self.send_header("Content-Type", "application/json")
+                  self.send_header("Content-Length", str(len(body)))
+                  self.end_headers()
+                  self.wfile.write(body)
+              def log_message(self, format, *args):
+                  pass
+
+          server = http.server.HTTPServer(("0.0.0.0", 18081), Handler)
+          server.serve_forever()
+          EOF
+          python3 /tmp/mock_server.py &
+          sleep 1
+          echo "Mock server started"
+
+      - id: action
+        uses: .
+        with:
+          access-token: fake-token
+          endpoint: http://localhost:18081/repos/owner/repo/languages
+          exclude: "python"
+
+      - name: Assert languages output is set
+        env:
+          ACTUAL: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "actual: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: languages output is empty"
+            exit 1
+          fi
+          echo "PASS: languages output is set"
+
+      - name: Assert python is excluded
+        env:
+          ACTUAL: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "actual: $ACTUAL"
+          if echo "$ACTUAL" | grep -qi "python"; then
+            echo "FAIL: python should have been excluded but found in: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: python correctly excluded"
+
+      - name: Assert javascript is still present
+        env:
+          ACTUAL: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "actual: $ACTUAL"
+          if echo "$ACTUAL" | grep -qi "javascript"; then
+            echo "PASS: javascript found in languages"
+          else
+            echo "FAIL: javascript not found in languages output: $ACTUAL"
+            exit 1
+          fi
+
+      - name: Assert go is still present
+        env:
+          ACTUAL: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "actual: $ACTUAL"
+          if echo "$ACTUAL" | grep -qi "go"; then
+            echo "PASS: go found in languages"
+          else
+            echo "FAIL: go not found in languages output: $ACTUAL"
+            exit 1
+          fi
