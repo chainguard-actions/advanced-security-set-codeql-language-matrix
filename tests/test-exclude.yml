@@ -1,0 +1,41 @@
+name: Test exclude languages
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ github.token }}
+          endpoint: https://api.github.com/repos/${{ github.repository }}/languages
+          exclude: "python, java"
+
+      - name: Assert excluded languages are not in output
+        env:
+          LANGUAGES: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "languages output: $LANGUAGES"
+          # The output must be a valid JSON array
+          if ! echo "$LANGUAGES" | python3 -c "import sys, json; val = json.load(sys.stdin); assert isinstance(val, list)" 2>/dev/null; then
+            echo "FAIL: output is not a valid JSON array: $LANGUAGES"
+            exit 1
+          fi
+          # Verify 'python' is not in the output
+          if echo "$LANGUAGES" | python3 -c "import sys, json; langs = json.load(sys.stdin); assert 'python' not in langs, f'python found in {langs}'" 2>/dev/null; then
+            echo "PASS: python correctly excluded"
+          else
+            echo "FAIL: python was found in output despite being excluded"
+            exit 1
+          fi
+          # Verify 'java' is not in the output
+          if echo "$LANGUAGES" | python3 -c "import sys, json; langs = json.load(sys.stdin); assert 'java' not in langs, f'java found in {langs}'" 2>/dev/null; then
+            echo "PASS: java correctly excluded"
+          else
+            echo "FAIL: java was found in output despite being excluded"
+            exit 1
+          fi
+          echo "PASS: all excluded languages are absent from output"

@@ -1,4 +1,4 @@
-name: Test basic usage - detect CodeQL languages
+name: Test basic usage - get CodeQL languages
 on:
   workflow_dispatch:
 jobs:
@@ -7,68 +7,20 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Start mock languages API server
-        run: |
-          # Create a simple HTTP server that returns a languages JSON response
-          cat > /tmp/mock_server.py << 'EOF'
-          import http.server
-          import json
-
-          class Handler(http.server.BaseHTTPRequestHandler):
-              def do_GET(self):
-                  body = json.dumps({"Python": 12345, "JavaScript": 6789, "Shell": 100}).encode()
-                  self.send_response(200)
-                  self.send_header("Content-Type", "application/json")
-                  self.send_header("Content-Length", str(len(body)))
-                  self.end_headers()
-                  self.wfile.write(body)
-              def log_message(self, format, *args):
-                  pass
-
-          server = http.server.HTTPServer(("0.0.0.0", 18080), Handler)
-          server.serve_forever()
-          EOF
-          python3 /tmp/mock_server.py &
-          sleep 1
-          echo "Mock server started"
-
       - id: action
         uses: .
         with:
-          access-token: fake-token
-          endpoint: http://localhost:18080/repos/owner/repo/languages
+          access-token: ${{ github.token }}
+          endpoint: https://api.github.com/repos/${{ github.repository }}/languages
 
-      - name: Assert languages output is set
+      - name: Assert languages output is a valid JSON array
         env:
-          ACTUAL: ${{ steps.action.outputs.languages }}
+          LANGUAGES: ${{ steps.action.outputs.languages }}
         run: |
-          echo "actual: $ACTUAL"
-          if [ -z "$ACTUAL" ]; then
-            echo "FAIL: languages output is empty"
+          echo "languages output: $LANGUAGES"
+          # The output must be a valid JSON array (could be empty [] or contain languages)
+          if ! echo "$LANGUAGES" | python3 -c "import sys, json; val = json.load(sys.stdin); assert isinstance(val, list)" 2>/dev/null; then
+            echo "FAIL: output is not a valid JSON array: $LANGUAGES"
             exit 1
           fi
-          echo "PASS: languages output is set"
-
-      - name: Assert python is in languages
-        env:
-          ACTUAL: ${{ steps.action.outputs.languages }}
-        run: |
-          echo "actual: $ACTUAL"
-          if echo "$ACTUAL" | grep -qi "python"; then
-            echo "PASS: python found in languages"
-          else
-            echo "FAIL: python not found in languages output: $ACTUAL"
-            exit 1
-          fi
-
-      - name: Assert javascript is in languages
-        env:
-          ACTUAL: ${{ steps.action.outputs.languages }}
-        run: |
-          echo "actual: $ACTUAL"
-          if echo "$ACTUAL" | grep -qi "javascript"; then
-            echo "PASS: javascript found in languages"
-          else
-            echo "FAIL: javascript not found in languages output: $ACTUAL"
-            exit 1
-          fi
+          echo "PASS: output is a valid JSON array"

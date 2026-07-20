@@ -1,0 +1,38 @@
+name: Test all CodeQL languages excluded
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ github.token }}
+          endpoint: https://api.github.com/repos/${{ github.repository }}/languages
+          # Exclude all CodeQL-supported languages to ensure we get an empty array
+          exclude: "cpp, csharp, go, java, javascript, python, ruby, typescript, kotlin, swift"
+
+      - name: Assert output is a valid JSON array (possibly empty when all excluded)
+        env:
+          LANGUAGES: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "languages output: $LANGUAGES"
+          # The output must be a valid JSON array
+          if ! echo "$LANGUAGES" | python3 -c "import sys, json; val = json.load(sys.stdin); assert isinstance(val, list)" 2>/dev/null; then
+            echo "FAIL: output is not a valid JSON array: $LANGUAGES"
+            exit 1
+          fi
+          # Verify none of the excluded languages appear in the output
+          EXCLUDED="cpp csharp go java javascript python ruby typescript kotlin swift"
+          for lang in $EXCLUDED; do
+            if echo "$LANGUAGES" | python3 -c "import sys, json; langs = json.load(sys.stdin); assert '$lang' not in langs" 2>/dev/null; then
+              echo "PASS: $lang correctly excluded"
+            else
+              echo "FAIL: $lang was found in output despite being excluded"
+              exit 1
+            fi
+          done
+          echo "PASS: all excluded languages are absent from output"
