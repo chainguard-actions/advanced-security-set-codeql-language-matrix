@@ -1,0 +1,57 @@
+name: Test exclude multiple languages
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up git origin reachable inside Docker container
+        run: |
+          git config user.email "test@example.com"
+          git config user.name "Test User"
+          rm -rf "$GITHUB_WORKSPACE/.git-remote"
+          git init --bare "$GITHUB_WORKSPACE/.git-remote"
+          git push "$GITHUB_WORKSPACE/.git-remote" HEAD:refs/heads/act-harness
+          git remote set-url origin "$GITHUB_WORKSPACE/.git-remote" 2>/dev/null || \
+            git remote add origin "$GITHUB_WORKSPACE/.git-remote"
+
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ github.token }}
+          # python/cpython is a Python + C repo; exclude both python and cpp
+          endpoint: https://api.github.com/repos/python/cpython/languages
+          exclude: 'python, cpp'
+
+      - name: Assert python and cpp are excluded from output
+        env:
+          ACTUAL: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Output may be empty if only python and cpp were supported — that's valid
+          # Verify it's a valid JSON array (or empty string meaning no languages)
+          if [ -z "$ACTUAL" ]; then
+            echo "PASS: no languages output (all were excluded)"
+            exit 0
+          fi
+          echo "$ACTUAL" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Not a list'" || {
+            echo "FAIL: output is not a valid JSON array"
+            exit 1
+          }
+          # Verify 'python' is not in the output
+          if echo "$ACTUAL" | python3 -c "import sys, json; langs = json.load(sys.stdin); assert 'python' not in langs, 'python found in output'"; then
+            echo "PASS: python is correctly excluded"
+          else
+            echo "FAIL: python should have been excluded but was found in: $ACTUAL"
+            exit 1
+          fi
+          # Verify 'cpp' is not in the output
+          if echo "$ACTUAL" | python3 -c "import sys, json; langs = json.load(sys.stdin); assert 'cpp' not in langs, 'cpp found in output'"; then
+            echo "PASS: cpp is correctly excluded"
+          else
+            echo "FAIL: cpp should have been excluded but was found in: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: all excluded languages are absent from output"
