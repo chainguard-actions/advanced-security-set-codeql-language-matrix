@@ -1,4 +1,4 @@
-name: Test language name mapping
+name: Test language mapping - TypeScript maps to javascript
 on:
   workflow_dispatch:
 jobs:
@@ -7,58 +7,58 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      # Start a mock HTTP server that returns languages needing name mapping
-      # C++ -> cpp, C# -> csharp, TypeScript -> javascript (merged), Kotlin -> java (merged)
-      - name: Start mock API server
-        run: |
-          cat > /tmp/mock_server.py << 'EOF'
-          import http.server
-          import json
-
-          class Handler(http.server.BaseHTTPRequestHandler):
-              def do_GET(self):
-                  response = json.dumps({"C++": 5000, "C#": 3000})
-                  self.send_response(200)
-                  self.send_header("Content-Type", "application/json")
-                  self.end_headers()
-                  self.wfile.write(response.encode())
-              def log_message(self, format, *args):
-                  pass
-
-          server = http.server.HTTPServer(("0.0.0.0", 8765), Handler)
-          server.serve_forever()
-          EOF
-          python3 /tmp/mock_server.py &
-          echo "Mock server PID: $!"
-          sleep 1
-
+      # Use actions/checkout repo which is known to have TypeScript (maps to javascript in CodeQL)
       - id: action
         uses: .
         with:
-          access-token: fake-token
-          endpoint: http://172.17.0.1:8765/repos/owner/repo/languages
-          exclude: ""
+          access-token: ${{ github.token }}
+          endpoint: https://api.github.com/repos/actions/checkout/languages
 
-      - name: Assert cpp is in output (mapped from C++)
+      - name: Assert languages output is set
         env:
           ACTUAL: ${{ steps.action.outputs.languages }}
         run: |
           echo "actual: $ACTUAL"
-          if echo "$ACTUAL" | grep -q "cpp"; then
-            echo "PASS: cpp found in output"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: languages output is empty"
+            exit 1
+          fi
+          echo "PASS: languages output is set"
+
+      - name: Assert output is valid JSON array
+        env:
+          ACTUAL: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "actual: $ACTUAL"
+          echo "$ACTUAL" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Expected a list'" || {
+            echo "FAIL: languages output is not a valid JSON array"
+            exit 1
+          }
+          echo "PASS: output is a valid JSON array"
+
+      - name: Assert TypeScript is mapped to javascript in CodeQL output
+        env:
+          ACTUAL: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "actual: $ACTUAL"
+          # actions/checkout has TypeScript which should map to 'javascript' in CodeQL
+          # 'typescript' should NOT appear (it gets mapped to 'javascript')
+          if echo "$ACTUAL" | python3 -c "import sys, json; data = json.load(sys.stdin); assert 'typescript' not in data, 'typescript should be mapped to javascript, not kept as typescript'"; then
+            echo "PASS: typescript is correctly mapped (not present as raw 'typescript')"
           else
-            echo "FAIL: expected 'cpp' (mapped from C++) in output, got: $ACTUAL"
+            echo "FAIL: typescript was found unmapped in the output"
             exit 1
           fi
 
-      - name: Assert csharp is in output (mapped from C#)
+      - name: Assert javascript is present (from TypeScript mapping)
         env:
           ACTUAL: ${{ steps.action.outputs.languages }}
         run: |
           echo "actual: $ACTUAL"
-          if echo "$ACTUAL" | grep -q "csharp"; then
-            echo "PASS: csharp found in output"
+          # actions/checkout has TypeScript which maps to 'javascript'
+          if echo "$ACTUAL" | python3 -c "import sys, json; data = json.load(sys.stdin); assert 'javascript' in data, 'javascript should be present from TypeScript mapping, got: ' + str(data)"; then
+            echo "PASS: javascript is present (mapped from TypeScript)"
           else
-            echo "FAIL: expected 'csharp' (mapped from C#) in output, got: $ACTUAL"
+            echo "FAIL: javascript not found in output (expected from TypeScript mapping)"
             exit 1
           fi

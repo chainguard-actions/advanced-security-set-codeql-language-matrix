@@ -1,0 +1,54 @@
+name: Test exclude languages
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # First run without exclusion to get the baseline list
+      - id: action-baseline
+        uses: .
+        with:
+          access-token: ${{ github.token }}
+          endpoint: https://api.github.com/repos/${{ github.repository }}/languages
+
+      - name: Show baseline languages
+        env:
+          BASELINE: ${{ steps.action-baseline.outputs.languages }}
+        run: |
+          echo "baseline languages: $BASELINE"
+
+      # Run with python excluded (python is a common CodeQL language)
+      - id: action-excluded
+        uses: .
+        with:
+          access-token: ${{ github.token }}
+          endpoint: https://api.github.com/repos/${{ github.repository }}/languages
+          exclude: "python"
+
+      - name: Assert excluded output is valid JSON array
+        env:
+          ACTUAL: ${{ steps.action-excluded.outputs.languages }}
+        run: |
+          echo "actual (with python excluded): $ACTUAL"
+          # Verify it's a valid JSON array
+          echo "$ACTUAL" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Expected a list'" || {
+            echo "FAIL: languages output is not a valid JSON array"
+            exit 1
+          }
+          echo "PASS: languages output is a valid JSON array"
+
+      - name: Assert python is not in excluded output
+        env:
+          ACTUAL: ${{ steps.action-excluded.outputs.languages }}
+        run: |
+          echo "actual: $ACTUAL"
+          # Check that 'python' is not in the output list
+          if echo "$ACTUAL" | python3 -c "import sys, json; data = json.load(sys.stdin); assert 'python' not in data, 'python should be excluded but found in: ' + str(data)"; then
+            echo "PASS: python is correctly excluded from the output"
+          else
+            echo "FAIL: python was found in the output despite being excluded"
+            exit 1
+          fi

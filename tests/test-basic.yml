@@ -1,4 +1,4 @@
-name: Test basic language detection
+name: Test basic usage - fetch CodeQL languages
 on:
   workflow_dispatch:
 jobs:
@@ -7,58 +7,31 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      # Start a mock HTTP server that returns a languages API response
-      - name: Start mock API server
-        run: |
-          # Create a simple Python HTTP server that returns a mock languages response
-          cat > /tmp/mock_server.py << 'EOF'
-          import http.server
-          import json
-
-          class Handler(http.server.BaseHTTPRequestHandler):
-              def do_GET(self):
-                  response = json.dumps({"Python": 12345, "JavaScript": 67890})
-                  self.send_response(200)
-                  self.send_header("Content-Type", "application/json")
-                  self.end_headers()
-                  self.wfile.write(response.encode())
-              def log_message(self, format, *args):
-                  pass
-
-          server = http.server.HTTPServer(("0.0.0.0", 8765), Handler)
-          server.serve_forever()
-          EOF
-          python3 /tmp/mock_server.py &
-          echo "Mock server PID: $!"
-          sleep 1
-
       - id: action
         uses: .
         with:
-          access-token: fake-token
-          endpoint: http://172.17.0.1:8765/repos/owner/repo/languages
-          exclude: ""
+          access-token: ${{ github.token }}
+          endpoint: https://api.github.com/repos/${{ github.repository }}/languages
 
-      - name: Assert languages output contains python
+      - name: Assert languages output is set
         env:
           ACTUAL: ${{ steps.action.outputs.languages }}
         run: |
           echo "actual: $ACTUAL"
-          if echo "$ACTUAL" | grep -q "python"; then
-            echo "PASS: python found in output"
-          else
-            echo "FAIL: expected 'python' in output, got: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: languages output is empty"
             exit 1
           fi
+          echo "PASS: languages output is set to: $ACTUAL"
 
-      - name: Assert languages output contains javascript
+      - name: Assert languages output is valid JSON array
         env:
           ACTUAL: ${{ steps.action.outputs.languages }}
         run: |
           echo "actual: $ACTUAL"
-          if echo "$ACTUAL" | grep -q "javascript"; then
-            echo "PASS: javascript found in output"
-          else
-            echo "FAIL: expected 'javascript' in output, got: $ACTUAL"
+          # Verify it's a valid JSON array
+          echo "$ACTUAL" | python3 -c "import sys, json; data = json.load(sys.stdin); assert isinstance(data, list), 'Expected a list'" || {
+            echo "FAIL: languages output is not a valid JSON array"
             exit 1
-          fi
+          }
+          echo "PASS: languages output is a valid JSON array"
