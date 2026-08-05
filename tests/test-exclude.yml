@@ -1,0 +1,39 @@
+name: Test exclude languages
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # actions/checkout repo uses JavaScript and TypeScript (maps to 'javascript' in CodeQL)
+      # We exclude 'javascript' and expect an empty or non-javascript result
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ secrets.GITHUB_TOKEN }}
+          endpoint: https://api.github.com/repos/actions/checkout/languages
+          exclude: "javascript"
+
+      - name: Assert javascript is excluded from matrix
+        env:
+          MATRIX: ${{ steps.action.outputs.matrix }}
+          LANGUAGES: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "matrix: $MATRIX"
+          echo "languages: $LANGUAGES"
+
+          # matrix output should be present (even if empty include list)
+          if [ -z "$MATRIX" ]; then
+            echo "FAIL: matrix output is empty"
+            exit 1
+          fi
+
+          # 'javascript' should NOT appear in the languages list since we excluded it
+          if echo "$LANGUAGES" | grep -qi '"javascript"'; then
+            echo "FAIL: 'javascript' should have been excluded but is still present: $LANGUAGES"
+            exit 1
+          fi
+
+          echo "PASS: javascript correctly excluded. matrix=$MATRIX languages=$LANGUAGES"

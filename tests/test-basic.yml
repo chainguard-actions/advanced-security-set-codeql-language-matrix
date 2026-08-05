@@ -1,0 +1,48 @@
+name: Test basic usage - detect languages from public repo
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ secrets.GITHUB_TOKEN }}
+          endpoint: https://api.github.com/repos/actions/checkout/languages
+
+      - name: Assert matrix output is non-empty
+        env:
+          MATRIX: ${{ steps.action.outputs.matrix }}
+          LANGUAGES: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "matrix: $MATRIX"
+          echo "languages: $LANGUAGES"
+
+          # matrix should be a non-empty JSON object
+          if [ -z "$MATRIX" ]; then
+            echo "FAIL: matrix output is empty"
+            exit 1
+          fi
+
+          # matrix should contain "include"
+          if ! echo "$MATRIX" | grep -q '"include"'; then
+            echo "FAIL: matrix output does not contain 'include' key"
+            exit 1
+          fi
+
+          # languages output should be a non-empty JSON array
+          if [ -z "$LANGUAGES" ]; then
+            echo "FAIL: languages output is empty"
+            exit 1
+          fi
+
+          # actions/checkout is a JavaScript/TypeScript repo — expect 'javascript'
+          if ! echo "$LANGUAGES" | grep -qi 'javascript'; then
+            echo "FAIL: expected 'javascript' in languages output, got: $LANGUAGES"
+            exit 1
+          fi
+
+          echo "PASS: matrix=$MATRIX languages=$LANGUAGES"

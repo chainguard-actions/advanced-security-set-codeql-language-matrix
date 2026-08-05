@@ -1,0 +1,45 @@
+name: Test build-mode-manual-override
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # actions/checkout is a JavaScript/TypeScript repo.
+      # We override 'javascript' to use manual build mode.
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ secrets.GITHUB_TOKEN }}
+          endpoint: https://api.github.com/repos/actions/checkout/languages
+          build-mode-manual-override: "javascript"
+
+      - name: Assert javascript uses manual build mode
+        env:
+          MATRIX: ${{ steps.action.outputs.matrix }}
+          LANGUAGES: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "matrix: $MATRIX"
+          echo "languages: $LANGUAGES"
+
+          # matrix should be non-empty
+          if [ -z "$MATRIX" ]; then
+            echo "FAIL: matrix output is empty"
+            exit 1
+          fi
+
+          # matrix should contain 'javascript'
+          if ! echo "$LANGUAGES" | grep -qi 'javascript'; then
+            echo "FAIL: expected 'javascript' in languages output, got: $LANGUAGES"
+            exit 1
+          fi
+
+          # matrix should contain 'manual' build mode for javascript
+          if ! echo "$MATRIX" | grep -q '"manual"'; then
+            echo "FAIL: expected 'manual' build mode in matrix, got: $MATRIX"
+            exit 1
+          fi
+
+          echo "PASS: javascript uses manual build mode. matrix=$MATRIX"

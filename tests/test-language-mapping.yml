@@ -1,0 +1,44 @@
+name: Test language mapping - Go repo
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # golang/go repo is primarily written in Go, which is a supported CodeQL language
+      # Go is also in the "manual build mode by default" list (via 'go' in original_languages)
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ secrets.GITHUB_TOKEN }}
+          endpoint: https://api.github.com/repos/golang/go/languages
+
+      - name: Assert go is detected and uses manual build mode
+        env:
+          MATRIX: ${{ steps.action.outputs.matrix }}
+          LANGUAGES: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "matrix: $MATRIX"
+          echo "languages: $LANGUAGES"
+
+          # matrix should be non-empty
+          if [ -z "$MATRIX" ]; then
+            echo "FAIL: matrix output is empty"
+            exit 1
+          fi
+
+          # 'go' should appear in the languages list
+          if ! echo "$LANGUAGES" | grep -qi '"go"'; then
+            echo "FAIL: expected 'go' in languages output, got: $LANGUAGES"
+            exit 1
+          fi
+
+          # Go uses manual build mode by default
+          if ! echo "$MATRIX" | grep -q '"manual"'; then
+            echo "FAIL: expected 'manual' build mode for go in matrix, got: $MATRIX"
+            exit 1
+          fi
+
+          echo "PASS: go detected with manual build mode. matrix=$MATRIX"
