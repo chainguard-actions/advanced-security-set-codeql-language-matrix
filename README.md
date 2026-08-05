@@ -12,6 +12,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | v1.2.2 | [`v1.2.2`](https://github.com/chainguard-actions/advanced-security-set-codeql-language-matrix/tree/v1.2.2) | [`5368c64`](https://github.com/advanced-security/set-codeql-language-matrix/commit/5368c646f45dd32eae765bb664790f6e41e783cf) |
 | v1.3.0 | [`v1.3.0`](https://github.com/chainguard-actions/advanced-security-set-codeql-language-matrix/tree/v1.3.0) | [`9f9ba17`](https://github.com/advanced-security/set-codeql-language-matrix/commit/9f9ba17a61d34c97baaf17e96276389a0cd73392) |
 | v1.5.0 | [`v1.5.0`](https://github.com/chainguard-actions/advanced-security-set-codeql-language-matrix/tree/v1.5.0) | [`ea35805`](https://github.com/advanced-security/set-codeql-language-matrix/commit/ea35805cc8c3d625834a99d5fe21f762c5249b61) |
+| v1.6.0 | [`v1.6.0`](https://github.com/chainguard-actions/advanced-security-set-codeql-language-matrix/tree/v1.6.0) | [`038e12c`](https://github.com/advanced-security/set-codeql-language-matrix/commit/038e12c9474b0c253f122180eb943bee2e10a24a) |
 
 ## Privacy
 
