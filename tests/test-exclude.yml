@@ -1,0 +1,42 @@
+name: Test exclude languages from matrix
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ github.token }}
+          # Use a repo known to have JavaScript/TypeScript
+          endpoint: https://api.github.com/repos/actions/checkout/languages
+          # Exclude javascript (mapped from TypeScript/JavaScript)
+          exclude: "javascript"
+      - name: Assert matrix does not contain excluded language
+        env:
+          MATRIX: ${{ steps.action.outputs.matrix }}
+          LANGUAGES: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "matrix: $MATRIX"
+          echo "languages: $LANGUAGES"
+          if [ -z "$MATRIX" ]; then
+            echo "FAIL: matrix output is empty"
+            exit 1
+          fi
+          # Verify matrix is valid JSON
+          echo "$MATRIX" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          if 'include' not in data:
+              print('FAIL: matrix JSON missing include key')
+              sys.exit(1)
+          # Check that 'javascript' is not in the matrix
+          for item in data['include']:
+              if item.get('language') == 'javascript':
+                  print('FAIL: excluded language javascript found in matrix')
+                  sys.exit(1)
+          print('PASS: excluded language not present in matrix, items:', len(data['include']))
+          "
+          echo "PASS: exclude filter applied correctly"

@@ -1,0 +1,48 @@
+name: Test build-mode-manual-override
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ github.token }}
+          # Use a repo known to have JavaScript/TypeScript
+          endpoint: https://api.github.com/repos/actions/checkout/languages
+          # Force javascript to use manual build mode
+          build-mode-manual-override: "javascript"
+      - name: Assert build-mode-manual-override is applied
+        env:
+          MATRIX: ${{ steps.action.outputs.matrix }}
+        run: |
+          echo "matrix: $MATRIX"
+          if [ -z "$MATRIX" ]; then
+            echo "FAIL: matrix output is empty"
+            exit 1
+          fi
+          # Verify matrix is valid JSON and javascript uses manual build mode
+          echo "$MATRIX" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          if 'include' not in data:
+              print('FAIL: matrix JSON missing include key')
+              sys.exit(1)
+          found_js = False
+          for item in data['include']:
+              lang = item.get('language')
+              build_mode = item.get('build-mode')
+              print(f'  language={lang}, build-mode={build_mode}')
+              if lang == 'javascript':
+                  found_js = True
+                  if build_mode != 'manual':
+                      print(f'FAIL: expected javascript to have build-mode=manual, got {build_mode}')
+                      sys.exit(1)
+                  print('PASS: javascript has build-mode=manual as expected')
+          if not found_js:
+              print('INFO: javascript not in matrix (repo may not have JS), skipping build-mode check')
+          print('PASS: build-mode-manual-override applied correctly')
+          "
+          echo "PASS"

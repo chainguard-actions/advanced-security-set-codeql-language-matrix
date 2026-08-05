@@ -1,0 +1,52 @@
+name: Test basic usage - get CodeQL language matrix
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          access-token: ${{ github.token }}
+          # Use a well-known public repo that has JavaScript/TypeScript code
+          endpoint: https://api.github.com/repos/actions/checkout/languages
+      - name: Assert matrix output is set and non-empty
+        env:
+          MATRIX: ${{ steps.action.outputs.matrix }}
+          LANGUAGES: ${{ steps.action.outputs.languages }}
+        run: |
+          echo "matrix: $MATRIX"
+          echo "languages: $LANGUAGES"
+          if [ -z "$MATRIX" ]; then
+            echo "FAIL: matrix output is empty"
+            exit 1
+          fi
+          # Verify matrix is valid JSON with an include key
+          echo "$MATRIX" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          if 'include' not in data:
+              print('FAIL: matrix JSON missing include key')
+              sys.exit(1)
+          if not isinstance(data['include'], list):
+              print('FAIL: matrix include is not a list')
+              sys.exit(1)
+          if len(data['include']) == 0:
+              print('FAIL: matrix include list is empty')
+              sys.exit(1)
+          for item in data['include']:
+              if 'language' not in item:
+                  print('FAIL: matrix item missing language key')
+                  sys.exit(1)
+              if 'build-mode' not in item:
+                  print('FAIL: matrix item missing build-mode key')
+                  sys.exit(1)
+          print('PASS: matrix is valid with', len(data['include']), 'language(s)')
+          "
+          if [ -z "$LANGUAGES" ]; then
+            echo "FAIL: languages output is empty"
+            exit 1
+          fi
+          echo "PASS: both outputs are set"
